@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CompareShipment — Route map (Mapbox)</title>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:Inter,system-ui,sans-serif;color:#13171F;background:#E9EEF0}
+  #map{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 40%,#F4F6F4 0%,#DCE4E6 70%,#CBD6DA 100%)}
+  .panel{position:fixed;left:20px;top:20px;width:min(380px,calc(100vw - 40px));background:rgba(255,255,255,0.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(19,23,31,0.08);border-radius:20px;padding:20px;box-shadow:0 20px 50px -20px rgba(19,23,31,0.35);display:flex;flex-direction:column;gap:14px;z-index:2}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.02em}
+  .brand i{display:flex;align-items:center;gap:3px}
+  .brand i b{width:7px;height:7px;border-radius:50%;display:block}
+  h1{margin:0;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:24px;line-height:1.15;letter-spacing:-0.03em}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#5B6372}
+  input,select{height:48px;border:1px solid #D3D9E0;border-radius:12px;padding:0 12px;font:500 17px Inter,sans-serif;color:#13171F;background:#FFFFFF;width:100%}
+  input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid #3D5AFE;outline-offset:2px}
+  .go{height:52px;border:0;border-radius:14px;background:#3D5AFE;color:#fff;font:700 17px 'Plus Jakarta Sans',sans-serif;cursor:pointer;box-shadow:0 10px 24px -10px rgba(61,90,254,0.8)}
+  .go:disabled{opacity:0.6;cursor:default}
+  .err{margin:0;font-size:14px;color:#B42318;min-height:0}
+  .hint{margin:0;font-size:13px;color:#5B6372}
+  .result{position:fixed;left:50%;bottom:24px;transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .45s ease,transform .45s ease;width:min(560px,calc(100vw - 32px));background:rgba(255,255,255,0.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(19,23,31,0.08);border-radius:20px;padding:20px 22px;box-shadow:0 24px 60px -24px rgba(19,23,31,0.45);z-index:2;display:flex;flex-direction:column;gap:12px}
+  .result.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .route-line{font-size:15px;font-weight:600;color:#3A4250}
+  .price{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:clamp(34px,6vw,46px);line-height:1;letter-spacing:-0.035em}
+  .meta{display:flex;gap:22px;font-size:15px;color:#5B6372}
+  .meta b{color:#13171F;font-weight:600}
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  .btn2{height:46px;padding:0 18px;border-radius:12px;border:1px solid #D3D9E0;background:#fff;font:600 15px Inter,sans-serif;cursor:pointer;color:#13171F}
+  .btn1{height:46px;padding:0 18px;border-radius:12px;border:0;background:#13171F;color:#fff;font:600 15px Inter,sans-serif;cursor:pointer}
+  .note{margin:0;font-size:12px;color:#5B6372}
+  .tag{font:700 13px 'Plus Jakarta Sans',sans-serif;padding:5px 10px;border-radius:999px;white-space:nowrap;box-shadow:0 6px 16px -6px rgba(19,23,31,0.5);transform:translateY(-34px)}
+  .pin{position:relative;display:flex;flex-direction:column;align-items:center}
+  .dot{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(19,23,31,0.45);position:absolute;top:-8px}
+  .ring{position:absolute;top:-22px;width:44px;height:44px;border-radius:50%;animation:ring 1.8s ease-out infinite}
+  @keyframes ring{0%{transform:scale(.3);opacity:.7}100%{transform:scale(1.4);opacity:0}}
+  .car{width:34px;height:34px;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 4px 6px rgba(19,23,31,0.45))}
+  .loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font:600 16px Inter,sans-serif;color:#3A4250;z-index:3;background:#E9EEF0;transition:opacity .4s}
+  .loading.hide{opacity:0;pointer-events:none}
+  @media (max-width:640px){
+    .panel{left:12px;top:12px;width:calc(100vw - 24px);padding:16px;gap:10px}
+    .panel.compact h1,.panel.compact .row2,.panel.compact .hint{display:none}
+    h1{font-size:20px}
+    .result{bottom:12px}
+  }
+  @media (prefers-reduced-motion:reduce){.ring{animation:none}}
+</style>
+</head>
+<body>
+<div id="map" role="img" aria-label="Animated map of the shipping route"></div>
+<div class="loading" id="loading">Loading map…</div>
+
+<form class="panel" id="form" novalidate>
+  <div class="brand"><i aria-hidden="true"><b style="border:2px solid #13171F;box-sizing:border-box"></b><b style="width:3px;height:3px;background:#13171F"></b><b style="width:3px;height:3px;background:#13171F"></b><b style="background:#3D5AFE"></b></i>CompareShipment</div>
+  <h1>Where is your car going?</h1>
+  <div class="row">
+    <label>Pickup ZIP<input id="zipA" inputmode="numeric" autocomplete="postal-code" maxlength="5" value="10001"></label>
+    <label>Delivery ZIP<input id="zipB" inputmode="numeric" maxlength="5" value="33101"></label>
+  </div>
+  <div class="row row2">
+    <label>Vehicle<select id="veh"><option value="sedan">Sedan</option><option value="suv">SUV</option><option value="pickup">Pickup</option><option value="moto">Motorcycle</option></select></label>
+    <label>Trailer<select id="trl"><option value="open">Open</option><option value="enclosed">Enclosed</option></select></label>
+  </div>
+  <button class="go" id="go" type="submit">Show my route</button>
+  <p class="err" id="err" role="alert"></p>
+  <p class="hint">No sign-up. Try any two US ZIP codes.</p>
+</form>
+
+<section class="result" id="result" aria-live="polite">
+  <div class="route-line" id="rLine"></div>
+  <div class="price" id="rPrice"></div>
+  <div class="meta"><span>Distance <b id="rMiles"></b></span><span>Transit <b id="rDays"></b></span></div>
+  <div class="actions">
+    <button class="btn1" type="button" id="quote">Get firm quotes →</button>
+    <button class="btn2" type="button" id="replay">Replay route</button>
+  </div>
+  <p class="note" id="rNote">Estimate based on 2026 per-mile market rates. Real driving route via Mapbox. Demo — no data is sent.</p>
+</section>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
+<script>
+(function(){
+  var TOKEN = 'pk.eyJ1Ijoia2hhcmV6bWkiLCJhIjoiY213bmZuMnl2MDlwczM1c2I4aXJyOGN6YyJ9.f-icMbxiRhCKFTlaYaC0aA';
+  mapboxgl.accessToken = TOKEN;
+  var $ = function(id){ return document.getElementById(id); };
+  var map, markers = [], running = false, last = null;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var MI = 1609.344;
+
+  function estimate(miles, vehicle, trailer){
+    var rate = 2.04*Math.pow(Math.max(miles,150)/300,-0.587);
+    var base = Math.max(miles*rate,450);
+    var vm = {sedan:1,suv:1.1,pickup:1.2,moto:0.65}[vehicle]||1;
+    var mid = base*vm*(trailer==='enclosed'?1.45:1);
+    var r50 = function(x){ return Math.round(x/50)*50; };
+    var d = Math.max(2, Math.ceil(miles/500)+1);
+    return {low:r50(mid*0.9), high:r50(mid*1.1), days:d+'–'+(d+2)};
+  }
+  function money(x){ return '$'+x.toLocaleString('en-US'); }
+  function hav(a, b){
+    var R = 6371008.8, t = Math.PI/180;
+    var dLat=(b[1]-a[1])*t, dLon=(b[0]-a[0])*t;
+    var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a[1]*t)*Math.cos(b[1]*t)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+  function bearing(p, q){
+    var t=Math.PI/180, y=Math.sin((q[0]-p[0])*t)*Math.cos(q[1]*t);
+    var x=Math.cos(p[1]*t)*Math.sin(q[1]*t)-Math.sin(p[1]*t)*Math.cos(q[1]*t)*Math.cos((q[0]-p[0])*t);
+    return Math.atan2(y,x)/t;
+  }
+  // resample a road line into n evenly spaced points (smooth driving speed)
+  function resample(coords, n){
+    var cum=[0];
+    for (var i=1;i<coords.length;i++) cum.push(cum[i-1]+hav(coords[i-1],coords[i]));
+    var total=cum[cum.length-1], out=[], j=0;
+    for (var k=0;k<=n;k++){
+      var target=total*k/n;
+      while (j<cum.length-2 && cum[j+1]<target) j++;
+      var seg=cum[j+1]-cum[j]||1, f=(target-cum[j])/seg;
+      out.push([coords[j][0]+(coords[j+1][0]-coords[j][0])*f, coords[j][1]+(coords[j+1][1]-coords[j][1])*f]);
+    }
+    return out;
+  }
+  function ease(x){ return x<0.5 ? 4*x*x*x : 1-Math.pow(-2*x+2,3)/2; }
+  function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function moveEnd(){ return new Promise(function(r){ map.once('moveend', function(){ r(); }); }); }
+
+  function pinEl(label, color, isDest){
+    var el=document.createElement('div'); el.className='pin';
+    var ring=document.createElement('div'); ring.className='ring'; ring.style.background=color; ring.style.opacity='0.4';
+    var dot=document.createElement('div'); dot.className='dot'; dot.style.background=color;
+    var tag=document.createElement('div'); tag.className='tag'; tag.textContent=label;
+    tag.style.background=isDest?'#3D5AFE':'#13171F'; tag.style.color='#fff';
+    el.appendChild(ring); el.appendChild(dot); el.appendChild(tag);
+    return el;
+  }
+  function carEl(){
+    var el=document.createElement('div'); el.className='car';
+    el.innerHTML='<svg width="20" height="34" viewBox="0 0 20 34" aria-hidden="true"><rect x="1" y="1" width="18" height="32" rx="6" fill="#FFFFFF" stroke="#13171F" stroke-width="1.5"/><rect x="4" y="6" width="12" height="7" rx="2" fill="#3D5AFE"/><rect x="4" y="22" width="12" height="5" rx="2" fill="#9AA6B8"/></svg>';
+    return el;
+  }
+  function clearMarkers(){ markers.forEach(function(m){ m.remove(); }); markers=[]; }
+  function setRoute(coords){
+    map.getSource('route').setData({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords.length>1?coords:[coords[0],coords[0]]}});
+  }
+
+  // ZIP -> place, with Mapbox Geocoding
+  function geocodeZip(zip){
+    var url='https://api.mapbox.com/search/geocode/v6/forward?q='+encodeURIComponent(zip)+'&country=us&types=postcode&limit=1&access_token='+TOKEN;
+    return fetch(url).then(function(r){ return r.json(); }).then(function(j){
+      var f=j.features&&j.features[0]; if (!f) return null;
+      var ctx=f.properties.context||{};
+      var city=(ctx.place&&ctx.place.name)||(ctx.locality&&ctx.locality.name)||f.properties.name;
+      var st=(ctx.region&&(ctx.region.region_code||ctx.region.name))||'';
+      return {c:f.geometry.coordinates, city:city, st:st};
+    });
+  }
+  // real driving route, with Mapbox Directions
+  function driveRoute(A, B){
+    var url='https://api.mapbox.com/directions/v5/mapbox/driving/'+A.c[0]+','+A.c[1]+';'+B.c[0]+','+B.c[1]+'?geometries=geojson&overview=full&access_token='+TOKEN;
+    return fetch(url).then(function(r){ return r.json(); }).then(function(j){
+      var r=j.routes&&j.routes[0]; if (!r) return null;
+      return {coords:r.geometry.coordinates, miles:Math.round(r.distance/MI), hours:r.duration/3600};
+    });
+  }
+
+  async function play(A, B, route){
+    if (running) return;
+    running = true; $('go').disabled = true; $('result').classList.remove('show');
+    if (window.innerWidth < 640) $('form').classList.add('compact');
+    clearMarkers(); setRoute([A.c]);
+    var miles = route.miles;
+    var est = estimate(miles, $('veh').value, $('trl').value);
+    var pts = resample(route.coords, 600);
+    var span = Math.max(1, Math.log2(Math.max(miles,60)/60));
+    var nearZoom = 8, farZoom = Math.max(3, nearZoom - span*1.05);
+
+    map.flyTo({center:A.c, zoom:nearZoom, pitch:55, bearing:-12, duration:reduce?0:2800, essential:true});
+    await moveEnd();
+    markers.push(new mapboxgl.Marker({element:pinEl('Pickup · '+A.city+(A.st?', '+A.st:''),'#13171F',false), anchor:'center'}).setLngLat(A.c).addTo(map));
+    await wait(reduce?0:500);
+
+    var car = new mapboxgl.Marker({element:carEl(), rotationAlignment:'map', pitchAlignment:'map', anchor:'center'}).setLngLat(A.c).addTo(map);
+    markers.push(car);
+    var D = reduce ? 1 : Math.min(11000, Math.max(5000, 3500 + miles*2.6));
+    var smoothB = bearing(pts[0], pts[Math.min(20, pts.length-1)]);
+    await new Promise(function(done){
+      var t0 = performance.now();
+      function frame(now){
+        var raw = Math.max(0, Math.min(1,(now-t0)/D)), f = ease(raw);
+        var idx = Math.max(0, Math.min(pts.length-1, Math.floor(f*(pts.length-1))));
+        var cur = pts[idx], ahead = pts[Math.min(pts.length-1, idx+6)];
+        setRoute(pts.slice(0, idx+1));
+        if (ahead !== cur){ var b = bearing(cur, ahead); var diff=((b-smoothB+540)%360)-180; smoothB += diff*0.12; }
+        car.setLngLat(cur); car.setRotation(smoothB);
+        var z = nearZoom - (nearZoom-farZoom)*Math.sin(Math.PI*f);
+        map.jumpTo({center:cur, zoom:z, pitch:55 - 20*Math.sin(Math.PI*f), bearing:-12});
+        if (raw < 1) requestAnimationFrame(frame); else done();
+      }
+      requestAnimationFrame(frame);
+    });
+    setRoute(pts);
+    markers.push(new mapboxgl.Marker({element:pinEl('Delivery · '+B.city+(B.st?', '+B.st:''),'#3D5AFE',true), anchor:'center'}).setLngLat(B.c).addTo(map));
+
+    var bb = new mapboxgl.LngLatBounds(pts[0], pts[0]); pts.forEach(function(p){ bb.extend(p); });
+    var mobile = window.innerWidth < 640;
+    map.fitBounds(bb, {padding:{top: mobile?250:100, bottom: mobile?290:300, left: mobile?110:440, right: mobile?110:100}, pitch:25, bearing:0, duration:reduce?0:2200, maxZoom:8});
+    await moveEnd();
+
+    $('rLine').textContent = A.city+(A.st?', '+A.st:'')+' → '+B.city+(B.st?', '+B.st:'');
+    $('rPrice').textContent = money(est.low)+'–'+money(est.high);
+    $('rMiles').textContent = miles.toLocaleString('en-US')+' road mi';
+    $('rDays').textContent = est.days+' days';
+    $('rNote').textContent = 'Real driving distance via Mapbox. Estimate based on 2026 per-mile market rates. Demo — no data is sent.';
+    $('result').classList.add('show');
+    last = {A:A, B:B, route:route};
+    running = false; $('go').disabled = false;
+  }
+
+  $('form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    if (running) return;
+    var za=$('zipA').value.trim(), zb=$('zipB').value.trim();
+    if (!/^\d{5}$/.test(za)){ $('err').textContent='Enter a 5-digit pickup ZIP.'; return; }
+    if (!/^\d{5}$/.test(zb)){ $('err').textContent='Enter a 5-digit delivery ZIP.'; return; }
+    if (za===zb){ $('err').textContent='Pickup and delivery are the same ZIP.'; return; }
+    $('err').textContent=''; $('go').disabled=true; $('go').textContent='Finding route…';
+    try {
+      var both = await Promise.all([geocodeZip(za), geocodeZip(zb)]);
+      var A=both[0], B=both[1];
+      if (!A){ throw new Error('We couldn’t find pickup ZIP '+za+'.'); }
+      if (!B){ throw new Error('We couldn’t find delivery ZIP '+zb+'.'); }
+      var route = await driveRoute(A,B);
+      if (!route){ throw new Error('No driving route found between these ZIPs.'); }
+      $('go').textContent='Show my route';
+      play(A,B,route);
+    } catch(err){
+      $('err').textContent = err.message || 'Something went wrong. Try again.';
+      $('go').disabled=false; $('go').textContent='Show my route';
+    }
+  });
+  $('replay').addEventListener('click', function(){ if (last) play(last.A, last.B, last.route); });
+  ['zipA','zipB'].forEach(function(id){ $(id).addEventListener('focus', function(){ $('form').classList.remove('compact'); }); });
+  $('quote').addEventListener('click', function(){ $('rNote').textContent='In the real site, this opens the short form to send your route to licensed brokers.'; });
+
+  map = new mapboxgl.Map({
+    container:'map',
+    style:'mapbox://styles/mapbox/outdoors-v12',
+    projection:'globe',
+    center:[-96,38], zoom:2.2, pitch:0
+  });
+  map.on('style.load', function(){
+    map.setFog({color:'rgb(236,241,243)','high-color':'rgb(170,200,225)','horizon-blend':0.06,'space-color':'rgb(225,232,238)','star-intensity':0});
+    map.addSource('mapbox-dem',{type:'raster-dem',url:'mapbox://mapbox.mapbox-terrain-dem-v1',tileSize:512,maxzoom:14});
+    map.setTerrain({source:'mapbox-dem',exaggeration:1.3});
+    map.addSource('route',{type:'geojson',lineMetrics:true,data:{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[[0,0],[0,0]]}}});
+    map.addLayer({id:'route-glow',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#3D5AFE','line-width':['interpolate',['linear'],['zoom'],3,8,9,18],'line-opacity':0.2,'line-blur':4}});
+    map.addLayer({id:'route-case',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#FFFFFF','line-width':['interpolate',['linear'],['zoom'],3,4.5,9,9]}});
+    map.addLayer({id:'route',type:'line',source:'route',layout:{'line-cap':'round','line-join':'round'},paint:{'line-width':['interpolate',['linear'],['zoom'],3,2.5,9,5.5],'line-gradient':['interpolate',['linear'],['line-progress'],0,'#13171F',1,'#3D5AFE']}});
+  });
+  map.on('load', function(){
+    $('loading').classList.add('hide');
+    setTimeout(function(){ $('form').requestSubmit ? $('form').requestSubmit() : $('go').click(); }, 800);
+  });
+  map.on('error', function(e){ if (e && e.error && /401|403|token/i.test(String(e.error.message||e.error.status||''))) $('loading').textContent='Map key problem — check the Mapbox token.'; });
+})();
+</script>
+</body>
+</html>
